@@ -2,7 +2,7 @@ from datetime import timedelta
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
-from .models import Appointment, Clinic, Patient, User
+from .models import Appointment, Clinic, Invoice, Patient, User
 
 
 class RoleAccessTests(TestCase):
@@ -34,3 +34,25 @@ class RoleAccessTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["count"], 1)
 
+    def test_director_can_create_employee_with_password(self):
+        self.client.force_authenticate(self.director)
+        response = self.client.post("/api/users/", {
+            "username": "administrator2",
+            "password": "strong-pass-123",
+            "first_name": "Анна",
+            "last_name": "Петрова",
+            "role": "administrator",
+            "is_active": True,
+        })
+        self.assertEqual(response.status_code, 201)
+        self.assertNotIn("password", response.data)
+        self.assertTrue(User.objects.get(username="administrator2").check_password("strong-pass-123"))
+
+    def test_director_can_bulk_delete_patients_and_invoices(self):
+        second = Patient.objects.create(clinic=self.clinic, card_number="P-00002", first_name="Анна", last_name="Петрова", phone="+71111111111")
+        Invoice.objects.create(clinic=self.clinic, patient=self.patient, number="INV-TEST", amount=1000)
+        self.client.force_authenticate(self.director)
+        response = self.client.delete("/api/patients/bulk-delete/", {"ids": [self.patient.pk, second.pk]}, format="json")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["deleted"], 2)
+        self.assertFalse(Patient.objects.filter(pk__in=[self.patient.pk, second.pk]).exists())

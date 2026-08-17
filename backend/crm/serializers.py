@@ -7,10 +7,30 @@ User = get_user_model()
 
 class UserSerializer(serializers.ModelSerializer):
     display_name = serializers.ReadOnlyField()
+    password = serializers.CharField(write_only=True, required=False, min_length=8)
 
     class Meta:
         model = User
-        fields = ("id", "username", "first_name", "last_name", "display_name", "email", "phone", "role", "specialization", "avatar", "access_rights", "is_active")
+        fields = ("id", "username", "password", "first_name", "last_name", "display_name", "email", "phone", "role", "specialization", "avatar", "access_rights", "is_active")
+
+    def create(self, validated_data):
+        password = validated_data.pop("password", None)
+        user = super().create(validated_data)
+        if password:
+            user.set_password(password)
+            user.save(update_fields=["password"])
+        else:
+            user.set_unusable_password()
+            user.save(update_fields=["password"])
+        return user
+
+    def update(self, instance, validated_data):
+        password = validated_data.pop("password", None)
+        user = super().update(instance, validated_data)
+        if password:
+            user.set_password(password)
+            user.save(update_fields=["password"])
+        return user
 
 
 class ClinicSerializer(serializers.ModelSerializer):

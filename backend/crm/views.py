@@ -61,6 +61,22 @@ class PatientViewSet(ClinicScopedMixin, viewsets.ModelViewSet):
         last = Patient.objects.filter(clinic=self.clinic()).count() + 1
         serializer.save(clinic=self.clinic(), card_number=f"P-{last:05d}")
 
+    def perform_destroy(self, instance):
+        Invoice.objects.filter(patient=instance).delete()
+        instance.delete()
+
+    @action(detail=False, methods=["delete"], url_path="bulk-delete")
+    def bulk_delete(self, request):
+        patient_ids = request.data.get("ids", [])
+        if not isinstance(patient_ids, list) or not patient_ids:
+            return Response({"ids": ["Передайте непустой список пациентов."]}, status=status.HTTP_400_BAD_REQUEST)
+        queryset = self.get_queryset().filter(pk__in=patient_ids)
+        resolved_ids = list(queryset.values_list("pk", flat=True))
+        Invoice.objects.filter(patient_id__in=resolved_ids).delete()
+        deleted = queryset.count()
+        queryset.delete()
+        return Response({"deleted": deleted})
+
 
 class AppointmentViewSet(ClinicScopedMixin, viewsets.ModelViewSet):
     serializer_class = AppointmentSerializer
